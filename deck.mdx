@@ -1,0 +1,617 @@
+import { dark, syntaxHighlighterPrism } from "@mdx-deck/themes";
+import { Box } from "theme-ui";
+
+export const theme = {
+  ...syntaxHighlighterPrism,
+  ...dark,
+};
+
+export const Highlighted = ({ children }) => (
+  <Box color="tomato" style={{ display: "inline-block" }}>
+    {children}
+  </Box>
+);
+
+# DEFI: The Deep Dark End
+
+Your funds are unsafe
+
+---
+
+## I'm going to steal from you...
+
+---
+
+## \$ whoami
+
+<Steps>
+
+
+- Raymond Yeh
+- Sofware Developer @ GovTech
+- Author @ geek.sg
+- Invested in cryptocurrency since 2017
+- Arbitrage | Market Making | Flash Loan | Audit | Exploit
+
+</Steps>
+
+
+---
+
+## Basic Building Blocks of Defi
+
+<Steps>
+
+
+- Ether
+- Tokens (DAI, USDC, cDAI, UNI-ETH-USDC, COMP, UNI)
+- Decentralized Exchanges (Uniswap, Balancer, Curve)
+- Lending Platform (Compound, dydx, Aave, Maker)
+- Asset Management (Balancer, Yearn, Harvest)
+- Insurance (Nexus Mutual)
+- etc
+
+</Steps>
+
+
+<Notes>
+
+
+- Ether &lt;&gt; Currency (SGD / USD)
+- Tokens &lt;&gt; Asset / Derivatives / Debt / etc
+- Decentralized Exchanges &lt;&gt; Stock Exchanges (SGX / NYSE) / OTC
+- Lending Platform &lt;&gt; Banks / Brokerage
+- Asset Management &lt;&gt; Asset Management (Blackrock / Vanguard/ Berkshire Hathaway)
+- Insurance &lt;&gt; Insurance (AIA / Prudential / Great Eastern)
+- etc
+
+</Notes>
+
+
+---
+
+## Let's Farm At The Deep End
+
+<small>#degen #ape #apy #uniswapgems</small>
+
+---
+
+## Farm Template 101
+
+<Steps>
+
+
+- Stake <Highlighted>insert popular tokens</Highlighted> tokens with <Highlighted>insert AMM</Highlighted>, get LP token
+- Stake token in <Highlighted>insert created contract</Highlighted>, get <Highlighted>insert veggie token</Highlighted>
+- Stake <Highlighted>insert veggie token</Highlighted> with <Highlighted>insert popular token</Highlighted>, get more <Highlighted>insert veggie token</Highlighted>
+- Sell <Highlighted>insert veggie token</Highlighted> anytime
+- Profit!
+
+</Steps>
+
+
+---
+
+## SushiSwap
+
+<Steps>
+
+
+- Stake <Highlighted>USDC</Highlighted> &amp; <Highlighted>ETH</Highlighted> tokens with Uniswap, get <Highlighted>UNI:ETH-USDC</Highlighted> token
+- Stake <Highlighted>UNI:ETH-USDC</Highlighted> in <Highlighted>masterchef contract</Highlighted>, get <Highlighted>SUSHI</Highlighted>
+- Stake <Highlighted>SUSHI</Highlighted> with <Highlighted>ETH</Highlighted>, get even more <Highlighted>SUSHI</Highlighted>
+- Sell <Highlighted>SUSHI</Highlighted> anytime
+- Profit!
+
+</Steps>
+
+
+---
+
+## Masterchef Contract
+
+```solidity
+contract MasterChef is Ownable {
+    using SafeMath for uint256;
+    using SafeERC20 for IERC20;
+
+    struct UserInfo {
+        uint256 amount;
+        uint256 rewardDebt;
+    }
+
+    struct PoolInfo {
+        IERC20 lpToken;
+        uint256 allocPoint;
+        uint256 lastRewardBlock;
+        uint256 accSushiPerShare;
+    }
+
+
+    SushiToken public sushi;
+    address public devaddr;
+    uint256 public bonusEndBlock;
+    uint256 public sushiPerBlock;
+    uint256 public constant BONUS_MULTIPLIER = 10;
+
+    IMigratorChef public migrator;
+    PoolInfo[] public poolInfo;
+
+    mapping (uint256 => mapping (address => UserInfo)) public userInfo;
+    uint256 public totalAllocPoint = 0;
+    uint256 public startBlock;
+
+    event Deposit(address indexed user, uint256 indexed pid, uint256 amount);
+    event Withdraw(address indexed user, uint256 indexed pid, uint256 amount);
+    event EmergencyWithdraw(address indexed user, uint256 indexed pid, uint256 amount);
+
+    constructor(
+        SushiToken _sushi,
+        address _devaddr,
+        uint256 _sushiPerBlock,
+        uint256 _startBlock,
+        uint256 _bonusEndBlock
+    ) public {
+        sushi = _sushi;
+        devaddr = _devaddr;
+        sushiPerBlock = _sushiPerBlock;
+        bonusEndBlock = _bonusEndBlock;
+        startBlock = _startBlock;
+    }
+
+    function poolLength() external view returns (uint256) {
+        return poolInfo.length;
+    }
+
+    function add(uint256 _allocPoint, IERC20 _lpToken, bool _withUpdate) public onlyOwner {
+        if (_withUpdate) {
+            massUpdatePools();
+        }
+        uint256 lastRewardBlock = block.number > startBlock ? block.number : startBlock;
+        totalAllocPoint = totalAllocPoint.add(_allocPoint);
+        poolInfo.push(PoolInfo({
+            lpToken: _lpToken,
+            allocPoint: _allocPoint,
+            lastRewardBlock: lastRewardBlock,
+            accSushiPerShare: 0
+        }));
+    }
+
+    function set(uint256 _pid, uint256 _allocPoint, bool _withUpdate) public onlyOwner {
+        if (_withUpdate) {
+            massUpdatePools();
+        }
+        totalAllocPoint = totalAllocPoint.sub(poolInfo[_pid].allocPoint).add(_allocPoint);
+        poolInfo[_pid].allocPoint = _allocPoint;
+    }
+
+    function setMigrator(IMigratorChef _migrator) public onlyOwner {
+        migrator = _migrator;
+    }
+
+    function migrate(uint256 _pid) public {
+        require(address(migrator) != address(0), "migrate: no migrator");
+        PoolInfo storage pool = poolInfo[_pid];
+        IERC20 lpToken = pool.lpToken;
+        uint256 bal = lpToken.balanceOf(address(this));
+        lpToken.safeApprove(address(migrator), bal);
+        IERC20 newLpToken = migrator.migrate(lpToken);
+        require(bal == newLpToken.balanceOf(address(this)), "migrate: bad");
+        pool.lpToken = newLpToken;
+    }
+
+    function getMultiplier(uint256 _from, uint256 _to) public view returns (uint256) {
+        if (_to <= bonusEndBlock) {
+            return _to.sub(_from).mul(BONUS_MULTIPLIER);
+        } else if (_from >= bonusEndBlock) {
+            return _to.sub(_from);
+        } else {
+            return bonusEndBlock.sub(_from).mul(BONUS_MULTIPLIER).add(
+                _to.sub(bonusEndBlock)
+            );
+        }
+    }
+
+    function pendingSushi(uint256 _pid, address _user) external view returns (uint256) {
+        PoolInfo storage pool = poolInfo[_pid];
+        UserInfo storage user = userInfo[_pid][_user];
+        uint256 accSushiPerShare = pool.accSushiPerShare;
+        uint256 lpSupply = pool.lpToken.balanceOf(address(this));
+        if (block.number > pool.lastRewardBlock && lpSupply != 0) {
+            uint256 multiplier = getMultiplier(pool.lastRewardBlock, block.number);
+            uint256 sushiReward = multiplier.mul(sushiPerBlock).mul(pool.allocPoint).div(totalAllocPoint);
+            accSushiPerShare = accSushiPerShare.add(sushiReward.mul(1e12).div(lpSupply));
+        }
+        return user.amount.mul(accSushiPerShare).div(1e12).sub(user.rewardDebt);
+    }
+
+    function massUpdatePools() public {
+        uint256 length = poolInfo.length;
+        for (uint256 pid = 0; pid < length; ++pid) {
+            updatePool(pid);
+        }
+    }
+
+    function updatePool(uint256 _pid) public {
+        PoolInfo storage pool = poolInfo[_pid];
+        if (block.number <= pool.lastRewardBlock) {
+            return;
+        }
+        uint256 lpSupply = pool.lpToken.balanceOf(address(this));
+        if (lpSupply == 0) {
+            pool.lastRewardBlock = block.number;
+            return;
+        }
+        uint256 multiplier = getMultiplier(pool.lastRewardBlock, block.number);
+        uint256 sushiReward = multiplier.mul(sushiPerBlock).mul(pool.allocPoint).div(totalAllocPoint);
+        sushi.mint(devaddr, sushiReward.div(10));
+        sushi.mint(address(this), sushiReward);
+        pool.accSushiPerShare = pool.accSushiPerShare.add(sushiReward.mul(1e12).div(lpSupply));
+        pool.lastRewardBlock = block.number;
+    }
+
+    function deposit(uint256 _pid, uint256 _amount) public {
+        PoolInfo storage pool = poolInfo[_pid];
+        UserInfo storage user = userInfo[_pid][msg.sender];
+        updatePool(_pid);
+        if (user.amount > 0) {
+            uint256 pending = user.amount.mul(pool.accSushiPerShare).div(1e12).sub(user.rewardDebt);
+            safeSushiTransfer(msg.sender, pending);
+        }
+        pool.lpToken.safeTransferFrom(address(msg.sender), address(this), _amount);
+        user.amount = user.amount.add(_amount);
+        user.rewardDebt = user.amount.mul(pool.accSushiPerShare).div(1e12);
+        emit Deposit(msg.sender, _pid, _amount);
+    }
+
+    function withdraw(uint256 _pid, uint256 _amount) public {
+        PoolInfo storage pool = poolInfo[_pid];
+        UserInfo storage user = userInfo[_pid][msg.sender];
+        require(user.amount >= _amount, "withdraw: not good");
+        updatePool(_pid);
+        uint256 pending = user.amount.mul(pool.accSushiPerShare).div(1e12).sub(user.rewardDebt);
+        safeSushiTransfer(msg.sender, pending);
+        user.amount = user.amount.sub(_amount);
+        user.rewardDebt = user.amount.mul(pool.accSushiPerShare).div(1e12);
+        pool.lpToken.safeTransfer(address(msg.sender), _amount);
+        emit Withdraw(msg.sender, _pid, _amount);
+    }
+
+    function emergencyWithdraw(uint256 _pid) public {
+        PoolInfo storage pool = poolInfo[_pid];
+        UserInfo storage user = userInfo[_pid][msg.sender];
+        pool.lpToken.safeTransfer(address(msg.sender), user.amount);
+        emit EmergencyWithdraw(msg.sender, _pid, user.amount);
+        user.amount = 0;
+        user.rewardDebt = 0;
+    }
+
+    function safeSushiTransfer(address _to, uint256 _amount) internal {
+        uint256 sushiBal = sushi.balanceOf(address(this));
+        if (_amount > sushiBal) {
+            sushi.transfer(_to, sushiBal);
+        } else {
+            sushi.transfer(_to, _amount);
+        }
+    }
+
+    function dev(address _devaddr) public {
+        require(msg.sender == devaddr, "dev: wut?");
+        devaddr = _devaddr;
+    }
+}
+```
+
+---
+
+# Round 1
+
+<img src="/assets/hackerchef.png" style={{ height: "45%" }} />
+
+<Steps>
+
+
+- "Stumbled" on `ihackyourcoins1.com`
+- Approved your <Highlighted>UNI:ETH-USDC</Highlighted>
+- Staked your <Highlighted>UNI:ETH-USDC</Highlighted>
+
+</Steps>
+
+
+---
+
+# HACKED
+
+Your <Highlighted>UNI:ETH-USDC</Highlighted> are mine
+
+---
+
+## What happened?
+
+"Social Engineering Attack"
+
+<Steps>
+
+
+- What smart contract did you interact with?
+- Is smart contract on website same the one you've interacted?
+- Is smart contract verified?
+- Does the code look okay?
+
+</Steps>
+
+
+---
+
+# Round 2
+
+<img src="/assets/hackerchef.png" style={{ height: "45%" }} />
+
+<Steps>
+
+
+- "Stumbled" on `ihackyourcoins2.com`
+- Checked for social engineering attacks
+- Checked the masterchef code is exactly the same as masterchef
+- Staked your <Highlighted>UNI:ETH-USDC</Highlighted>
+
+</Steps>
+
+
+---
+
+# HACKED
+
+Your <Highlighted>ETH Liquidity</Highlighted> are mine
+
+Your <Highlighted>UNI:ETH-USDC</Highlighted> are mine
+
+---
+
+## What happened?
+
+"Composition & Initialisation of smart contracts"
+
+<Steps>
+
+
+- Who has priviledged access to contract?
+- Is timelock configured properly?
+- What token contract is it using?
+- How much tokens are in circulation vs farmed?
+
+</Steps>
+
+
+---
+
+## Migration To Malicious Contract
+
+```solidity
+function setMigrator(IMigratorChef _migrator) public onlyOwner {
+    migrator = _migrator;
+}
+...
+function migrate(uint256 _pid) public {
+    require(address(migrator) != address(0), "migrate: no migrator");
+    PoolInfo storage pool = poolInfo[_pid];
+    IERC20 lpToken = pool.lpToken;
+    uint256 bal = lpToken.balanceOf(address(this));
+    lpToken.safeApprove(address(migrator), bal);
+    IERC20 newLpToken = migrator.migrate(lpToken);
+    require(bal == newLpToken.balanceOf(address(this)), "migrate: bad");
+    pool.lpToken = newLpToken;
+}
+```
+
+---
+
+## Different Reward Ratio
+
+```solidity
+function updatePool(uint256 _pid) public {
+    ...
+    sushi.mint(devaddr, sushiReward.div(10));
+    sushi.mint(address(this), sushiReward);
+    ...
+}
+```
+
+---
+
+## Access to Minting Function on <Highlighted>Token Contract</Highlighted>
+
+```solidity
+function _mint(address account, uint256 amount) internal virtual {
+    require(account != address(0), "ERC20: mint to the zero address");
+    _beforeTokenTransfer(address(0), account, amount);
+    _totalSupply = _totalSupply.add(amount);
+    _balances[account] = _balances[account].add(amount);
+    emit Transfer(address(0), account, amount);
+}
+```
+
+---
+
+## Round 3
+
+<img src="/assets/hackerchef.png" style={{ height: "45%" }} />
+
+<Steps>
+
+
+- "Stumbled" on `ihackyourcoins3.com`
+- Done all due diligence
+- Farmed for a while now with nice profits
+- Withdrew staked <Highlighted>UNI:ETH-USDC</Highlighted> and <Highlighted>HACK</Highlighted>
+
+</Steps>
+
+
+---
+
+# HACKED
+
+Your <Highlighted>UNI:ETH-USDC</Highlighted> are mine
+
+---
+
+## What happened?
+
+"Some contract transferred all my tokens away!"
+
+---
+
+> Did you remove your approval limit from the malicious contract at ihackyourcoins1.com?!?!?
+
+---
+
+## Round nth
+
+<Steps>
+
+
+- Arithmetic
+- Access Controls
+- Economics Exploits (Flash loan/Arbitrage/Front-running)
+- Re-entrancy
+- Memory Overwrite
+- DoS
+- External Contract Reference
+- Delegate Call
+- etc
+
+</Steps>
+
+
+<Notes>
+
+
+Recent Rugs: https://boxmining.com/newsletter-11/?amp#DeFi/yield_farming_scams_are_ruining_things_for_the_space
+
+- Arithmetic
+- Access Controls
+  - Parity Wallet
+- Economics Exploits (Flash loan/Arbitrage/Front-running)
+  - Harvest finance hack
+    - Flashloan + arbitrage
+    - https://rekt.ghost.io/harvest-finance-rekt/
+    - https://twitter.com/bneiluj/status/1320686478486347778
+- Re-entrancy
+  - dForce LendF.me (24M)
+    - ERC777
+    - Walkthrough: https://twitter.com/FrankResearcher/status/1251771278719098886
+    - https://defirate.com/dforce-hack/
+- Memory Overwrite
+  - Memory layout, 2^256 rows
+- DoS
+  - Parity Wallet (152M) [Nov'17]
+    - https://cointelegraph.com/news/parity-multisig-wallet-hacked-or-how-come
+- External Contract Reference
+  - STA (500k)
+    - Deflationary token &amp; DEX
+    - https://1inch-exchange.medium.com/balancer-hack-2020-a8f7131c980e
+  - UniBomb (50k)
+    - https://medium.com/@unibombproject/unibomb-a-technical-overview-f7ec33d1db75
+  - BZx (630k)
+    - https://www.coindesk.com/defi-project-bzx-exploited-for-second-time-in-a-week-loses-630k-in-ether
+- Delegate Call
+  - Parity Wallet (150M) [Jul'17]
+    - https://blog.openzeppelin.com/parity-wallet-hack-reloaded/
+- etc
+
+</Notes>
+
+
+---
+
+## What's in a HACK?
+
+<Notes>
+
+
+https://twitter.com/bneiluj/status/1320686478486347778
+
+- It this a hack or an arbitrage?
+- Who has the rights to the money?
+- Should law enforcers be involved?
+
+</Notes>
+
+
+---
+
+## DEFI as a social experiment
+
+<Steps>
+
+
+- Voluntary
+- Code as Law
+- (Even Bad Code)
+- Time Dilation
+- Opensourced &amp; Public Information
+
+</Steps>
+
+
+<Notes>
+
+
+Longitudinal Study
+
+- Governments | Central Banks (CBDC) | Law Makers
+- Economists (esp Game Theorist) | Sociologists | Technologists
+- Financers (derivatives and financial innovations like flash loan)
+
+</Notes>
+
+
+---
+
+## Protecting yourself
+
+<Steps>
+
+
+- Start slow
+- Use hardware wallet
+- Check all smart contracts you interact with
+- Limit access to your tokens
+- Take calculated risk before "apeing" into any project
+- Learn to read smart contracts
+- Write smart contracts
+- Learn the intricacies of Ethereum
+- Take a masterclass on smart contract security
+
+</Steps>
+
+
+<Notes>
+  
+
+- Use hardware wallet 
+- https://www.ledger.com/ 
+- Check all smart contract you interact with
+    - contract address 
+    - function name 
+    - function parameters
+- Limit access to your tokens 
+    - https://revoke.cash/ 
+- Take calculated risk before "apeing" into any project 
+- https://legacy.geek.sg/blog/bet-sizing-with-kelly-kelly-criterion 
+- Learn to smart contracts
+- Write smart contracts
+- Learn the intricacies of Ethereum
+    - https://dasp.co/ 
+    - https://consensys.github.io/smart-contract-best-practices/known_attacks/ 
+    - https://solidity-05.ethernaut.openzeppelin.com/ 
+    - https://ethernaut.gdshive.io/
+- Take a masterclass on smart contract security
+    - Launching on https://geek.sg/
+
+</Notes>
+
+--- 
+
+# END
